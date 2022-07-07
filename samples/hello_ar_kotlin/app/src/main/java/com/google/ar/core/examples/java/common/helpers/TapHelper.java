@@ -16,6 +16,7 @@
 package com.google.ar.core.examples.java.common.helpers;
 
 import android.content.Context;
+import android.util.Log;
 import android.view.GestureDetector;
 import android.view.MotionEvent;
 import android.view.View;
@@ -31,7 +32,9 @@ public final class TapHelper implements OnTouchListener {
   private final GestureDetector gestureDetector;
   private final BlockingQueue<MotionEvent> queuedSingleTaps = new ArrayBlockingQueue<>(16);
 
-  /**
+    private final BlockingQueue<MotionEvent> queuedTouchEvents = new ArrayBlockingQueue<>(16);
+
+    /**
    * Creates the tap helper.
    *
    * @param context the application's context.
@@ -66,6 +69,22 @@ public final class TapHelper implements OnTouchListener {
 
   @Override
   public boolean onTouch(View view, MotionEvent motionEvent) {
-    return gestureDetector.onTouchEvent(motionEvent);
+      Log.i("HelloArRenderer-TapHelper", "offer " + motionEvent + ", queue size = " + queuedTouchEvents.size());
+      if (queuedTouchEvents.peek() != null && queuedTouchEvents.peek().getAction() == MotionEvent.ACTION_MOVE) {
+          queuedTouchEvents.poll();
+      }
+      queuedTouchEvents.offer(MotionEvent.obtain(motionEvent));
+      return gestureDetector.onTouchEvent(motionEvent);
   }
+
+    /**
+     * Polls for a touch event.
+     */
+    public MotionEvent pollTouchEvent() {
+        MotionEvent polled = queuedTouchEvents.poll();
+        if (polled != null) {
+            Log.i("HelloArRenderer-TapHelper", "poll" + polled + ", queue size = " + queuedTouchEvents.size());
+        }
+        return polled;
+    }
 }

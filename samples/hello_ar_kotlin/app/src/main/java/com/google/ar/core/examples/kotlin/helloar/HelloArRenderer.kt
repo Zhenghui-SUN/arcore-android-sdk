@@ -18,6 +18,7 @@ package com.google.ar.core.examples.kotlin.helloar
 import android.opengl.GLES30
 import android.opengl.Matrix
 import android.util.Log
+import android.view.MotionEvent
 import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.LifecycleOwner
 import com.google.ar.core.Anchor
@@ -144,6 +145,7 @@ class HelloArRenderer(val activity: HelloArActivity) :
   }
 
   override fun onSurfaceCreated(render: SampleRender) {
+    this.render = render
     // Prepare the rendering objects.
     // This involves reading shaders and 3D model files, so may throw an IOException.
     try {
@@ -313,7 +315,8 @@ class HelloArRenderer(val activity: HelloArActivity) :
     }
 
     // Handle one tap per frame.
-    handleTap(frame, camera)
+//    handleTap(frame, camera)
+    handleTouch(frame, camera)
 
     // Keep the screen unlocked while tracking, but allow it to lock when tracking stops.
     trackingStateHelper.updateKeepScreenOnFlag(camera.trackingState)
@@ -382,7 +385,7 @@ class HelloArRenderer(val activity: HelloArActivity) :
 
     // Visualize anchors created by touch.
     render.clear(virtualSceneFramebuffer, 0f, 0f, 0f, 0f)
-    for ((anchor, trackable) in
+    for ((anchor, trackable, stillPlacing, valid) in
       wrappedAnchors.filter { it.anchor.trackingState == TrackingState.TRACKING }) {
       // Get the current pose of an Anchor in world space. The Anchor pose is updated
       // during calls to session.update() as ARCore refines its estimate of the world.
@@ -396,15 +399,22 @@ class HelloArRenderer(val activity: HelloArActivity) :
       virtualObjectShader.setMat4("u_ModelView", modelViewMatrix)
       virtualObjectShader.setMat4("u_ModelViewProjection", modelViewProjectionMatrix)
       val texture =
-        if ((trackable as? InstantPlacementPoint)?.trackingMethod ==
-            InstantPlacementPoint.TrackingMethod.SCREENSPACE_WITH_APPROXIMATE_DISTANCE
-        ) {
-          virtualObjectAlbedoInstantPlacementTexture
-        } else {
-          virtualObjectAlbedoTexture
+        when {
+          stillPlacing -> {
+            if (valid) {
+              GLES30.glColorMask(false, true, false, true)
+            } else {
+              GLES30.glColorMask(true, false, false, true)
+            }
+            virtualObjectAlbedoInstantPlacementTexture
+          }
+          (trackable as? InstantPlacementPoint)?.trackingMethod ==
+                  InstantPlacementPoint.TrackingMethod.SCREENSPACE_WITH_APPROXIMATE_DISTANCE -> virtualObjectAlbedoInstantPlacementTexture
+          else -> virtualObjectAlbedoTexture
         }
       virtualObjectShader.setTexture("u_AlbedoTexture", texture)
       render.draw(virtualObjectMesh, virtualObjectShader, virtualSceneFramebuffer)
+      GLES30.glColorMask(true, true, true, true)
     }
 
     // Compose the virtual scene with the background.
@@ -522,6 +532,72 @@ class HelloArRenderer(val activity: HelloArActivity) :
     }
   }
 
+  // Handle only one touch event per frame, as touch events are usually low frequency compared to frame rate.
+  private fun handleTouch(frame: Frame, camera: Camera) {
+    if (camera.trackingState != TrackingState.TRACKING) return
+    val touchEvent = activity.view.tapHelper.pollTouchEvent() ?: return
+    
+    wrappedAnchors.forEach { anchor ->
+      if (anchor.stillPlacing) {
+        anchor.anchor.detach()
+      }
+    }
+    wrappedAnchors.removeAll {
+      it.stillPlacing
+    }
+
+    val hitResultList =
+      if (activity.instantPlacementSettings.isInstantPlacementEnabled) {
+        frame.hitTestInstantPlacement(touchEvent.x, touchEvent.y, APPROXIMATE_DISTANCE_METERS)
+      } else {
+        frame.hitTest(touchEvent)
+      }
+
+    // Hits are sorted by depth. Consider only closest hit on a plane, Oriented Point, Depth Point,
+    // or Instant Placement Point.
+    val firstHitResult =
+      hitResultList.firstOrNull { hit ->
+        when (val trackable = hit.trackable!!) {
+          is Plane ->
+            trackable.isPoseInPolygon(hit.hitPose) &&
+                    PlaneRenderer.calculateDistanceToPlane(hit.hitPose, camera.pose) > 0
+          is Point -> trackable.orientationMode == Point.OrientationMode.ESTIMATED_SURFACE_NORMAL
+          is InstantPlacementPoint -> true
+          // DepthPoints are only returned if Config.DepthMode is set to AUTOMATIC.
+          is DepthPoint -> true
+          else -> false
+        }
+      }
+    
+    when (touchEvent.action) {
+      MotionEvent.ACTION_DOWN, MotionEvent.ACTION_MOVE -> {
+        Log.i("HelloArRenderer", "draw when ACTION_DOWN/ACTION_MOVE")
+        val hitResult = hitResultList.firstOrNull() ?: return
+        wrappedAnchors.add(WrappedAnchor(hitResult.createAnchor(), hitResult.trackable, true, firstHitResult != null))
+      }
+      MotionEvent.ACTION_UP -> {
+        Log.i("HelloArRenderer", "draw when ACTION_UP")
+        if (firstHitResult != null) {
+          // Cap the number of objects created. This avoids overloading both the
+          // rendering system and ARCore.
+          if (wrappedAnchors.size >= 20) {
+            wrappedAnchors[0].anchor.detach()
+            wrappedAnchors.removeAt(0)
+          }
+
+          // Adding an Anchor tells ARCore that it should track this position in
+          // space. This anchor is created on the Plane to place the 3D model
+          // in the correct position relative both to the world and to the plane.
+          wrappedAnchors.add(WrappedAnchor(firstHitResult.createAnchor(), firstHitResult.trackable))
+
+          // For devices that support the Depth API, shows a dialog to suggest enabling
+          // depth-based occlusion. This dialog needs to be spawned on the UI thread.
+          activity.runOnUiThread { activity.view.showOcclusionDialogIfNeeded() }
+        }   
+      }
+    }
+  }
+
   private fun showError(errorMessage: String) =
     activity.view.snackbarHelper.showError(activity, errorMessage)
 }
@@ -533,4 +609,6 @@ class HelloArRenderer(val activity: HelloArActivity) :
 private data class WrappedAnchor(
   val anchor: Anchor,
   val trackable: Trackable,
+  val stillPlacing: Boolean = false,
+  val valid: Boolean = true
 )
