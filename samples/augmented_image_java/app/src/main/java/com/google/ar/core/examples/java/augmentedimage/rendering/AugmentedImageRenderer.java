@@ -16,12 +16,21 @@
 package com.google.ar.core.examples.java.augmentedimage.rendering;
 
 import android.content.Context;
+import android.opengl.GLES20;
+import android.opengl.Matrix;
+
 import com.google.ar.core.Anchor;
 import com.google.ar.core.AugmentedImage;
 import com.google.ar.core.Pose;
+import com.google.ar.core.examples.java.common.rendering.BoxRenderer;
 import com.google.ar.core.examples.java.common.rendering.ObjectRenderer;
 import com.google.ar.core.examples.java.common.rendering.ObjectRenderer.BlendMode;
 import java.io.IOException;
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
+import java.nio.FloatBuffer;
+import java.nio.IntBuffer;
+import java.nio.ShortBuffer;
 
 /** Renders an augmented image. */
 public class AugmentedImageRenderer {
@@ -34,34 +43,55 @@ public class AugmentedImageRenderer {
     0x009688, 0x4CAF50, 0x8BC34A, 0xCDDC39, 0xFFEB3B, 0xFFC107, 0xFF9800,
   };
 
-  private final ObjectRenderer imageFrameUpperLeft = new ObjectRenderer();
-  private final ObjectRenderer imageFrameUpperRight = new ObjectRenderer();
-  private final ObjectRenderer imageFrameLowerLeft = new ObjectRenderer();
-  private final ObjectRenderer imageFrameLowerRight = new ObjectRenderer();
+//  private final ObjectRenderer imageFrameUpperLeft = new ObjectRenderer();
+//  private final ObjectRenderer imageFrameUpperRight = new ObjectRenderer();
+//  private final ObjectRenderer imageFrameLowerLeft = new ObjectRenderer();
+//  private final ObjectRenderer imageFrameLowerRight = new ObjectRenderer();
+
+//  private final BoxRenderer boxRenderer = new BoxRenderer();
+
+  private final ObjectRenderer boxRenderer = new ObjectRenderer();
+  private final BoxRenderer stencilRenderer = new BoxRenderer();
 
   public AugmentedImageRenderer() {}
 
   public void createOnGlThread(Context context) throws IOException {
 
-    imageFrameUpperLeft.createOnGlThread(
-        context, "models/frame_upper_left.obj", "models/frame_base.png");
-    imageFrameUpperLeft.setMaterialProperties(0.0f, 3.5f, 1.0f, 6.0f);
-    imageFrameUpperLeft.setBlendMode(BlendMode.AlphaBlending);
+//    imageFrameUpperLeft.createOnGlThread(
+//        context, "models/frame_upper_left.obj", "models/frame_base.png");
+//    imageFrameUpperLeft.setMaterialProperties(0.0f, 3.5f, 1.0f, 6.0f);
+//    imageFrameUpperLeft.setBlendMode(BlendMode.AlphaBlending);
+//
+//    imageFrameUpperRight.createOnGlThread(
+//        context, "models/frame_upper_right.obj", "models/frame_base.png");
+//    imageFrameUpperRight.setMaterialProperties(0.0f, 3.5f, 1.0f, 6.0f);
+//    imageFrameUpperRight.setBlendMode(BlendMode.AlphaBlending);
+//
+//    imageFrameLowerLeft.createOnGlThread(
+//        context, "models/frame_lower_left.obj", "models/frame_base.png");
+//    imageFrameLowerLeft.setMaterialProperties(0.0f, 3.5f, 1.0f, 6.0f);
+//    imageFrameLowerLeft.setBlendMode(BlendMode.AlphaBlending);
+//
+//    imageFrameLowerRight.createOnGlThread(
+//        context, "models/frame_lower_right.obj", "models/frame_base.png");
+//    imageFrameLowerRight.setMaterialProperties(0.0f, 3.5f, 1.0f, 6.0f);
+//    imageFrameLowerRight.setBlendMode(BlendMode.AlphaBlending);
 
-    imageFrameUpperRight.createOnGlThread(
-        context, "models/frame_upper_right.obj", "models/frame_base.png");
-    imageFrameUpperRight.setMaterialProperties(0.0f, 3.5f, 1.0f, 6.0f);
-    imageFrameUpperRight.setBlendMode(BlendMode.AlphaBlending);
+//    boxRenderer.createOnGlThread(
+//        context, "models/frame_lower_right.obj", "models/frame_base.png");
+//    boxRenderer.setMaterialProperties(0.0f, 3.5f, 1.0f, 6.0f);
+//    boxRenderer.setBlendMode(BoxRenderer.BlendMode.AlphaBlending);
 
-    imageFrameLowerLeft.createOnGlThread(
-        context, "models/frame_lower_left.obj", "models/frame_base.png");
-    imageFrameLowerLeft.setMaterialProperties(0.0f, 3.5f, 1.0f, 6.0f);
-    imageFrameLowerLeft.setBlendMode(BlendMode.AlphaBlending);
-
-    imageFrameLowerRight.createOnGlThread(
+    // stencil
+    stencilRenderer.createOnGlThread(
         context, "models/frame_lower_right.obj", "models/frame_base.png");
-    imageFrameLowerRight.setMaterialProperties(0.0f, 3.5f, 1.0f, 6.0f);
-    imageFrameLowerRight.setBlendMode(BlendMode.AlphaBlending);
+//    stencilRenderer.setMaterialProperties(0.0f, 3.5f, 1.0f, 6.0f);
+    stencilRenderer.setBlendMode(BoxRenderer.BlendMode.AlphaBlending);
+    
+    boxRenderer.createOnGlThread(
+        context, "models/box.obj", "models/box.png");
+    boxRenderer.setMaterialProperties(0.0f, 3.5f, 0.0f, 6.0f);
+    boxRenderer.setBlendMode(BlendMode.AlphaBlending);
   }
 
   public void draw(
@@ -98,24 +128,82 @@ public class AugmentedImageRenderer {
       worldBoundaryPoses[i] = anchorPose.compose(localBoundaryPoses[i]);
     }
 
-    float scaleFactor = 1.0f;
+
+    float x = augmentedImage.getExtentX();
+    float scaleFactor = x / 2.0f;
     float[] modelMatrix = new float[16];
 
-    worldBoundaryPoses[0].toMatrix(modelMatrix, 0);
-    imageFrameUpperLeft.updateModelMatrix(modelMatrix, scaleFactor);
-    imageFrameUpperLeft.draw(viewMatrix, projectionMatrix, colorCorrectionRgba, tintColor);
+//    // vertices
+//    FloatBuffer floatBuffer = ByteBuffer.allocateDirect(8 * 3 * 4).order(ByteOrder.nativeOrder()).asFloatBuffer();
+//    floatBuffer.rewind();
+//    floatBuffer.limit(8 * 3);
+//    floatBuffer.put(worldBoundaryPoses[0].getTranslation());
+//    floatBuffer.put(worldBoundaryPoses[1].getTranslation());
+//    floatBuffer.put(worldBoundaryPoses[2].getTranslation());
+//    floatBuffer.put(worldBoundaryPoses[3].getTranslation());
+//    float delta = 0.1f;
+//    float[] deltaTranslation = {0f, -0.1f, 0f};
+//    floatBuffer.put(worldBoundaryPoses[0].transformPoint(deltaTranslation));
+//    floatBuffer.put(worldBoundaryPoses[1].transformPoint(deltaTranslation));
+//    floatBuffer.put(worldBoundaryPoses[2].transformPoint(deltaTranslation));
+//    floatBuffer.put(worldBoundaryPoses[3].transformPoint(deltaTranslation));
+//    floatBuffer.position(0);
 
-    worldBoundaryPoses[1].toMatrix(modelMatrix, 0);
-    imageFrameUpperRight.updateModelMatrix(modelMatrix, scaleFactor);
-    imageFrameUpperRight.draw(viewMatrix, projectionMatrix, colorCorrectionRgba, tintColor);
+//    augmentedImage.getCenterPose().toMatrix(modelMatrix, 0);
+////    boxRenderer.updateModelMatrix(modelMatrix, scaleFactor);
+//    boxRenderer.draw(viewMatrix, projectionMatrix, colorCorrectionRgba, tintColor, floatBuffer);
 
-    worldBoundaryPoses[2].toMatrix(modelMatrix, 0);
-    imageFrameLowerRight.updateModelMatrix(modelMatrix, scaleFactor);
-    imageFrameLowerRight.draw(viewMatrix, projectionMatrix, colorCorrectionRgba, tintColor);
+    // stencil
+    GLES20.glClearStencil(0);
+    GLES20.glClear(GLES20.GL_STENCIL_BUFFER_BIT);
+    FloatBuffer stencilBuffer = ByteBuffer.allocateDirect(6 * 3 * 4).order(ByteOrder.nativeOrder()).asFloatBuffer();
+    stencilBuffer.rewind();
+    stencilBuffer.limit(6 * 3);
+    stencilBuffer.put(worldBoundaryPoses[0].getTranslation());
+    stencilBuffer.put(worldBoundaryPoses[1].getTranslation());
+    stencilBuffer.put(worldBoundaryPoses[2].getTranslation());
+    stencilBuffer.put(worldBoundaryPoses[0].getTranslation());
+    stencilBuffer.put(worldBoundaryPoses[2].getTranslation());
+    stencilBuffer.put(worldBoundaryPoses[3].getTranslation());
+    stencilBuffer.position(0);
+    GLES20.glEnable(GLES20.GL_STENCIL_TEST);
+    GLES20.glStencilMask(0xff);
+    GLES20.glStencilFunc(GLES20.GL_ALWAYS, 1, 0xff);
+    GLES20.glStencilOp(GLES20.GL_KEEP, GLES20.GL_KEEP, GLES20.GL_REPLACE);
+    GLES20.glColorMask(false, false, false, false);
+    augmentedImage.getCenterPose().toMatrix(modelMatrix, 0);
+//    boxRenderer.updateModelMatrix(modelMatrix, scaleFactor);
+    stencilRenderer.draw(viewMatrix, projectionMatrix, colorCorrectionRgba, tintColor, stencilBuffer);
+    GLES20.glColorMask(true, true, true, true);
+    GLES20.glStencilFunc(GLES20.GL_EQUAL, 1, 0xff);
+    GLES20.glDisable(GLES20.GL_DEPTH_TEST); // TODO why must call disable GL_DEPTH_TEST ?
 
-    worldBoundaryPoses[3].toMatrix(modelMatrix, 0);
-    imageFrameLowerLeft.updateModelMatrix(modelMatrix, scaleFactor);
-    imageFrameLowerLeft.draw(viewMatrix, projectionMatrix, colorCorrectionRgba, tintColor);
+    augmentedImage.getCenterPose().toMatrix(modelMatrix, 0);
+    boxRenderer.updateModelMatrix(modelMatrix, scaleFactor);
+    boxRenderer.draw(viewMatrix, projectionMatrix, colorCorrectionRgba, tintColor);
+    
+    GLES20.glDisable(GLES20.GL_STENCIL_TEST);
+    GLES20.glEnable(GLES20.GL_DEPTH_TEST);
+
+    // original demo
+//    float scaleFactor = 1.0f;
+//    float[] modelMatrix = new float[16];
+//
+//    worldBoundaryPoses[0].toMatrix(modelMatrix, 0);
+//    imageFrameUpperLeft.updateModelMatrix(modelMatrix, scaleFactor);
+//    imageFrameUpperLeft.draw(viewMatrix, projectionMatrix, colorCorrectionRgba, tintColor);
+//
+//    worldBoundaryPoses[1].toMatrix(modelMatrix, 0);
+//    imageFrameUpperRight.updateModelMatrix(modelMatrix, scaleFactor);
+//    imageFrameUpperRight.draw(viewMatrix, projectionMatrix, colorCorrectionRgba, tintColor);
+//
+//    worldBoundaryPoses[2].toMatrix(modelMatrix, 0);
+//    imageFrameLowerRight.updateModelMatrix(modelMatrix, scaleFactor);
+//    imageFrameLowerRight.draw(viewMatrix, projectionMatrix, colorCorrectionRgba, tintColor);
+//
+//    worldBoundaryPoses[3].toMatrix(modelMatrix, 0);
+//    imageFrameLowerLeft.updateModelMatrix(modelMatrix, scaleFactor);
+//    imageFrameLowerLeft.draw(viewMatrix, projectionMatrix, colorCorrectionRgba, tintColor);
   }
 
   private static float[] convertHexToColor(int colorHex) {
