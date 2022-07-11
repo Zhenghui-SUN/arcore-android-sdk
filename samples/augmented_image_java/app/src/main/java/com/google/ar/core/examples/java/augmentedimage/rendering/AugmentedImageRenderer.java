@@ -51,6 +51,7 @@ public class AugmentedImageRenderer {
 //  private final BoxRenderer boxRenderer = new BoxRenderer();
 
   private final ObjectRenderer boxRenderer = new ObjectRenderer();
+  private final ObjectRenderer earthRenderer = new ObjectRenderer();
   private final BoxRenderer stencilRenderer = new BoxRenderer();
 
   public AugmentedImageRenderer() {}
@@ -92,6 +93,11 @@ public class AugmentedImageRenderer {
         context, "models/box.obj", "models/box.png");
     boxRenderer.setMaterialProperties(0.0f, 3.5f, 0.0f, 6.0f);
     boxRenderer.setBlendMode(BlendMode.AlphaBlending);
+
+    earthRenderer.createOnGlThread(
+            context, "models/earth_out.obj", "models/earth.jpg");
+    earthRenderer.setMaterialProperties(0.0f, 3.5f, 0.0f, 6.0f);
+    earthRenderer.setBlendMode(BlendMode.AlphaBlending);
   }
 
   public void draw(
@@ -174,16 +180,27 @@ public class AugmentedImageRenderer {
     augmentedImage.getCenterPose().toMatrix(modelMatrix, 0);
 //    boxRenderer.updateModelMatrix(modelMatrix, scaleFactor);
     stencilRenderer.draw(viewMatrix, projectionMatrix, colorCorrectionRgba, tintColor, stencilBuffer);
+    
     GLES20.glColorMask(true, true, true, true);
     GLES20.glStencilFunc(GLES20.GL_EQUAL, 1, 0xff);
-    GLES20.glDisable(GLES20.GL_DEPTH_TEST); // TODO why must call disable GL_DEPTH_TEST ?
-
+    // TODO why must call GL_ALWAYS or disable GL_DEPTH_TEST ?
+//    GLES20.glDepthFunc(GLES20.GL_ALWAYS);
+    GLES20.glDisable(GLES20.GL_DEPTH_TEST);
     augmentedImage.getCenterPose().toMatrix(modelMatrix, 0);
     boxRenderer.updateModelMatrix(modelMatrix, scaleFactor);
     boxRenderer.draw(viewMatrix, projectionMatrix, colorCorrectionRgba, tintColor);
     
-    GLES20.glDisable(GLES20.GL_STENCIL_TEST);
+    // TODO 开启GL_DEPTH_TEST后只渲染半球，不开启面错乱
     GLES20.glEnable(GLES20.GL_DEPTH_TEST);
+//    GLES20.glEnable(GLES20.GL_CULL_FACE);
+//    GLES20.glCullFace(GLES20.GL_FRONT);
+    augmentedImage.getCenterPose().toMatrix(modelMatrix, 0);
+    earthRenderer.updateModelMatrix(modelMatrix, scaleFactor);
+    earthRenderer.draw(viewMatrix, projectionMatrix, colorCorrectionRgba, tintColor);
+//    GLES20.glDisable(GLES20.GL_CULL_FACE);
+    
+    GLES20.glEnable(GLES20.GL_DEPTH_TEST);
+    GLES20.glDisable(GLES20.GL_STENCIL_TEST);
 
     // original demo
 //    float scaleFactor = 1.0f;
